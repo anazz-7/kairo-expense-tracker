@@ -1,12 +1,24 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { ActiveTab, useExpense } from '../../context/ExpenseContext';
+import { usePwaInstall } from '../../hooks/usePwaInstall';
+import { PwaInstallModal } from '../common/PwaInstallModal';
 
 export const NavBar: React.FC = () => {
   const { activeTab, setActiveTab, setIsQuickAddOpen, setQuickAddInitialMode, triggerShakeTest } = useExpense();
+  const { isInstallable, isInstalled, isIos, triggerInstall } = usePwaInstall();
+  const [showPwaModal, setShowPwaModal] = useState<boolean>(false);
 
   const handleQuickAddClick = (mode: 'manual' | 'voice' | 'shake' = 'manual') => {
     setQuickAddInitialMode(mode);
     setIsQuickAddOpen(true);
+  };
+
+  const handleInstallClick = () => {
+    if (isIos) {
+      setShowPwaModal(true);
+    } else {
+      triggerInstall();
+    }
   };
 
   const navItems: { id: ActiveTab; label: string; icon: string }[] = [
@@ -19,6 +31,14 @@ export const NavBar: React.FC = () => {
 
   return (
     <>
+      {/* PWA Install Modal */}
+      <PwaInstallModal
+        isOpen={showPwaModal}
+        onClose={() => setShowPwaModal(false)}
+        onInstall={triggerInstall}
+        isIos={isIos}
+      />
+
       {/* Desktop Top Header & Navigation */}
       <header className="hidden md:flex fixed top-0 w-full z-50 h-16 bg-surface-white/90 backdrop-blur-xl border-b border-border-subtle px-8 items-center justify-between">
         <div className="flex items-center gap-3">
@@ -49,9 +69,20 @@ export const NavBar: React.FC = () => {
         </nav>
 
         <div className="flex items-center gap-3">
+          {!isInstalled && (
+            <button
+              onClick={handleInstallClick}
+              className="px-3.5 py-2 rounded-full bg-emerald-tint text-primary hover:bg-emerald-light/60 transition-all font-semibold text-xs flex items-center gap-1.5 border border-primary/30"
+              title="Install App on Device"
+            >
+              <span className="material-symbols-outlined text-[18px]">install_mobile</span>
+              <span>Install App</span>
+            </button>
+          )}
+
           <button
             onClick={triggerShakeTest}
-            className="px-3.5 py-2 rounded-full bg-emerald-tint text-primary hover:bg-emerald-light/50 transition-all font-semibold text-xs flex items-center gap-1.5 border border-primary/20"
+            className="px-3.5 py-2 rounded-full bg-surface-white text-text-secondary hover:bg-surface-muted transition-all font-semibold text-xs flex items-center gap-1.5 border border-border-subtle"
             title="Simulate device shake"
           >
             <span className="material-symbols-outlined text-[18px]">vibration</span>
@@ -78,6 +109,16 @@ export const NavBar: React.FC = () => {
         </div>
 
         <div className="flex items-center gap-2">
+          {!isInstalled && (
+            <button
+              onClick={handleInstallClick}
+              className="px-2.5 py-1 rounded-full bg-primary text-on-primary text-xs font-semibold flex items-center gap-1 shadow-sm active:scale-95"
+            >
+              <span className="material-symbols-outlined text-[16px]">install_mobile</span>
+              <span>Install</span>
+            </button>
+          )}
+
           <button
             onClick={triggerShakeTest}
             className="px-2.5 py-1 rounded-full bg-emerald-tint text-primary text-xs font-semibold flex items-center gap-1 border border-primary/20 active:scale-95"

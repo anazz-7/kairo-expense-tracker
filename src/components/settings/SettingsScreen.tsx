@@ -1,11 +1,12 @@
 import React, { useState } from 'react';
 import { useExpense } from '../../context/ExpenseContext';
+import { usePwaInstall } from '../../hooks/usePwaInstall';
+import { PwaInstallModal } from '../common/PwaInstallModal';
 
 export const SettingsScreen: React.FC = () => {
   const {
     settings,
     updateSettings,
-    user,
     transactions,
     categories,
     accounts,
@@ -13,11 +14,21 @@ export const SettingsScreen: React.FC = () => {
     resetAllData,
   } = useExpense();
 
+  const { isInstallable, isInstalled, isIos, triggerInstall } = usePwaInstall();
+  const [showPwaModal, setShowPwaModal] = useState<boolean>(false);
   const [toastMessage, setToastMessage] = useState<string | null>(null);
 
   const showToast = (msg: string) => {
     setToastMessage(msg);
     setTimeout(() => setToastMessage(null), 2500);
+  };
+
+  const handleInstallClick = () => {
+    if (isIos) {
+      setShowPwaModal(true);
+    } else {
+      triggerInstall();
+    }
   };
 
   const handleExportCSV = () => {
@@ -63,11 +74,44 @@ export const SettingsScreen: React.FC = () => {
         </div>
       )}
 
+      {/* PWA Modal */}
+      <PwaInstallModal
+        isOpen={showPwaModal}
+        onClose={() => setShowPwaModal(false)}
+        onInstall={triggerInstall}
+        isIos={isIos}
+      />
+
       {/* Header */}
       <div>
         <h2 className="font-bold text-2xl text-text-primary tracking-tight">Settings & Voice Calibration</h2>
-        <p className="text-xs text-text-muted">Configure shake sensitivity, voice auto-save, and export data</p>
+        <p className="text-xs text-text-muted">Configure shake sensitivity, voice auto-save, PWA installation, and export data</p>
       </div>
+
+      {/* SECTION 0: MOBILE PWA INSTALL CARD */}
+      {!isInstalled && (
+        <div className="bg-emerald-tint/90 border border-primary/30 rounded-2xl p-6 shadow-sm space-y-3">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-xl bg-surface-white text-primary flex items-center justify-center shadow-sm">
+                <span className="material-symbols-outlined text-[24px]">install_mobile</span>
+              </div>
+              <div>
+                <h3 className="font-bold text-base text-text-primary">Install Mobile App</h3>
+                <p className="text-xs text-text-secondary">Add Kairo AI to your Home Screen for 1-tap launch & full screen</p>
+              </div>
+            </div>
+
+            <button
+              onClick={handleInstallClick}
+              className="px-4 py-2.5 rounded-xl bg-primary text-on-primary font-bold text-xs shadow-md hover:bg-primary-container active:scale-95 transition-all flex items-center gap-1.5"
+            >
+              <span className="material-symbols-outlined text-[18px]">download</span>
+              <span>Install App</span>
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* SECTION 1: SHAKE & VOICE CALIBRATION */}
       <div className="bg-surface-white rounded-2xl border border-border-subtle p-6 shadow-sm space-y-6">
