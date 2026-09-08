@@ -9,9 +9,8 @@ export const TransactionsScreen: React.FC = () => {
   const [selectedCategory, setSelectedCategory] = useState<string>('all');
   const [selectedAccount, setSelectedAccount] = useState<string>('all');
   const [selectedType, setSelectedType] = useState<string>('all');
-  const [minAmount, setMinAmount] = useState<string>('');
-  const [maxAmount, setMaxAmount] = useState<string>('');
   const [sortBy, setSortBy] = useState<'date-desc' | 'date-asc' | 'amount-desc' | 'amount-asc'>('date-desc');
+  const [showFilters, setShowFilters] = useState<boolean>(false);
 
   // Edit Drawer State
   const [editingTx, setEditingTx] = useState<Transaction | null>(null);
@@ -20,7 +19,6 @@ export const TransactionsScreen: React.FC = () => {
 
   const filteredTransactions = useMemo(() => {
     return transactions.filter(tx => {
-      // Search text
       if (search.trim()) {
         const query = search.toLowerCase();
         const descMatch = tx.description?.toLowerCase().includes(query);
@@ -29,20 +27,9 @@ export const TransactionsScreen: React.FC = () => {
         if (!descMatch && !merchMatch && !amtMatch) return false;
       }
 
-      // Category
       if (selectedCategory !== 'all' && tx.category_id !== selectedCategory) return false;
-
-      // Account
       if (selectedAccount !== 'all' && tx.account_id !== selectedAccount) return false;
-
-      // Type
       if (selectedType !== 'all' && tx.type !== selectedType) return false;
-
-      // Min amount
-      if (minAmount && tx.amount < parseFloat(minAmount)) return false;
-
-      // Max amount
-      if (maxAmount && tx.amount > parseFloat(maxAmount)) return false;
 
       return true;
     }).sort((a, b) => {
@@ -52,9 +39,8 @@ export const TransactionsScreen: React.FC = () => {
       if (sortBy === 'amount-asc') return a.amount - b.amount;
       return 0;
     });
-  }, [transactions, search, selectedCategory, selectedAccount, selectedType, minAmount, maxAmount, sortBy]);
+  }, [transactions, search, selectedCategory, selectedAccount, selectedType, sortBy]);
 
-  // Date Grouping logic (TODAY, YESTERDAY, EARLIER THIS MONTH, etc.)
   const groupedTransactions = useMemo(() => {
     const todayStr = new Date().toISOString().split('T')[0];
     const yesterdayDate = new Date();
@@ -77,7 +63,12 @@ export const TransactionsScreen: React.FC = () => {
 
   const getCategoryName = (catId: string) => categories.find(c => c.id === catId)?.name || 'Expense';
   const getCategoryIcon = (catId: string) => categories.find(c => c.id === catId)?.icon || 'payments';
-  const getAccountName = (accId: string) => accounts.find(a => a.id === accId)?.name || 'Account';
+  
+  // P1 FIX: Always retrieve precise account name (e.g., UPI, HDFC Bank, Cash)
+  const getAccountName = (accId: string) => {
+    const acc = accounts.find(a => a.id === accId);
+    return acc ? acc.name : 'UPI';
+  };
 
   const handleSaveEdit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -88,126 +79,136 @@ export const TransactionsScreen: React.FC = () => {
   };
 
   return (
-    <div className="flex flex-col space-y-5 max-w-5xl mx-auto pb-24 md:pb-8">
-      {/* Header & Title */}
+    <div className="flex flex-col space-y-4 max-w-4xl mx-auto pb-20 md:pb-8 pt-2">
+      {/* Header & Collapsible Filter Button */}
       <div className="flex items-center justify-between">
         <div>
-          <h2 className="font-bold text-xl sm:text-2xl text-text-primary tracking-tight">Transactions</h2>
-          <p className="text-xs text-text-muted">Filtered history & ledger records ({filteredTransactions.length})</p>
+          <h2 className="font-bold text-xl text-text-primary tracking-tight">Transactions</h2>
+          <p className="text-xs text-text-muted">{filteredTransactions.length} records</p>
         </div>
+        <button
+          onClick={() => setShowFilters(!showFilters)}
+          className={`px-3 py-1.5 rounded-full text-xs font-semibold flex items-center gap-1.5 transition-all border ${
+            showFilters || selectedCategory !== 'all' || selectedAccount !== 'all' || selectedType !== 'all'
+              ? 'bg-primary text-on-primary border-primary shadow-xs'
+              : 'bg-surface-white text-text-secondary border-border-subtle hover:bg-surface-muted'
+          }`}
+        >
+          <span className="material-symbols-outlined text-[16px]">tune</span>
+          <span>Filters</span>
+        </button>
       </div>
 
-      {/* Search & Multi-Filters Toolbar */}
-      <div className="bg-surface-white p-3.5 sm:p-4 rounded-2xl border border-border-subtle shadow-sm space-y-3">
-        {/* Search Input */}
+      {/* Compact Search & Collapsible Filters */}
+      <div className="bg-surface-white p-3 rounded-2xl border border-border-subtle shadow-xs space-y-2.5">
         <div className="relative">
-          <span className="material-symbols-outlined absolute left-3.5 top-1/2 -translate-y-1/2 text-text-muted text-[18px] sm:text-[20px]">search</span>
+          <span className="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-text-muted text-[18px]">search</span>
           <input
             type="text"
-            placeholder="Search description, merchant, or amount..."
+            placeholder="Search transactions..."
             value={search}
             onChange={e => setSearch(e.target.value)}
-            className="w-full pl-9 sm:pl-10 pr-3 sm:pr-4 py-2 sm:py-2.5 bg-surface border border-border-subtle rounded-xl text-xs text-text-primary focus:outline-none focus:ring-2 focus:ring-primary/40"
+            className="w-full pl-9 pr-3 py-2 bg-surface border border-border-subtle rounded-xl text-xs text-text-primary focus:outline-none focus:ring-2 focus:ring-primary/40"
           />
         </div>
 
-        {/* Filter Pill Selectors */}
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
-          <select
-            value={selectedCategory}
-            onChange={e => setSelectedCategory(e.target.value)}
-            className="p-2 bg-surface border border-border-subtle rounded-xl text-xs text-text-primary focus:outline-none truncate"
-          >
-            <option value="all">All Categories</option>
-            {categories.map(c => (
-              <option key={c.id} value={c.id}>{c.name}</option>
-            ))}
-          </select>
+        {/* Collapsible Filter Dropdowns */}
+        {showFilters && (
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 pt-1 border-t border-border-subtle animate-fadeIn">
+            <select
+              value={selectedCategory}
+              onChange={e => setSelectedCategory(e.target.value)}
+              className="p-1.5 bg-surface border border-border-subtle rounded-lg text-xs text-text-primary focus:outline-none truncate"
+            >
+              <option value="all">All Categories</option>
+              {categories.map(c => (
+                <option key={c.id} value={c.id}>{c.name}</option>
+              ))}
+            </select>
 
-          <select
-            value={selectedAccount}
-            onChange={e => setSelectedAccount(e.target.value)}
-            className="p-2 bg-surface border border-border-subtle rounded-xl text-xs text-text-primary focus:outline-none truncate"
-          >
-            <option value="all">All Accounts</option>
-            {accounts.map(a => (
-              <option key={a.id} value={a.id}>{a.name}</option>
-            ))}
-          </select>
+            <select
+              value={selectedAccount}
+              onChange={e => setSelectedAccount(e.target.value)}
+              className="p-1.5 bg-surface border border-border-subtle rounded-lg text-xs text-text-primary focus:outline-none truncate"
+            >
+              <option value="all">All Accounts</option>
+              {accounts.map(a => (
+                <option key={a.id} value={a.id}>{a.name}</option>
+              ))}
+            </select>
 
-          <select
-            value={selectedType}
-            onChange={e => setSelectedType(e.target.value)}
-            className="p-2 bg-surface border border-border-subtle rounded-xl text-xs text-text-primary focus:outline-none truncate"
-          >
-            <option value="all">All Types</option>
-            <option value="expense">Expense Only</option>
-            <option value="income">Income Only</option>
-            <option value="transfer">Transfer Only</option>
-          </select>
+            <select
+              value={selectedType}
+              onChange={e => setSelectedType(e.target.value)}
+              className="p-1.5 bg-surface border border-border-subtle rounded-lg text-xs text-text-primary focus:outline-none truncate"
+            >
+              <option value="all">All Types</option>
+              <option value="expense">Expense Only</option>
+              <option value="income">Income Only</option>
+              <option value="transfer">Transfer Only</option>
+            </select>
 
-          <select
-            value={sortBy}
-            onChange={e => setSortBy(e.target.value as any)}
-            className="p-2 bg-surface border border-border-subtle rounded-xl text-xs text-text-primary focus:outline-none truncate"
-          >
-            <option value="date-desc">Newest First</option>
-            <option value="date-asc">Oldest First</option>
-            <option value="amount-desc">Highest Amount</option>
-            <option value="amount-asc">Lowest Amount</option>
-          </select>
-        </div>
+            <select
+              value={sortBy}
+              onChange={e => setSortBy(e.target.value as any)}
+              className="p-1.5 bg-surface border border-border-subtle rounded-lg text-xs text-text-primary focus:outline-none truncate"
+            >
+              <option value="date-desc">Newest First</option>
+              <option value="date-asc">Oldest First</option>
+              <option value="amount-desc">Highest Amount</option>
+              <option value="amount-asc">Lowest Amount</option>
+            </select>
+          </div>
+        )}
       </div>
 
       {/* Transaction List Grouped by Date */}
       {Object.keys(groupedTransactions).length === 0 ? (
-        <div className="bg-surface-white p-8 sm:p-12 rounded-2xl border border-border-subtle text-center">
-          <span className="material-symbols-outlined text-text-muted text-[40px] sm:text-[48px]">search_off</span>
-          <h3 className="font-bold text-base text-text-primary mt-2">No matching transactions found</h3>
-          <p className="text-xs text-text-muted mt-1">Try clearing your search query or filters.</p>
+        <div className="bg-surface-white p-8 rounded-2xl border border-border-subtle text-center">
+          <span className="material-symbols-outlined text-text-muted text-[36px]">search_off</span>
+          <h3 className="font-bold text-sm text-text-primary mt-2">No matching transactions found</h3>
         </div>
       ) : (
-        <div className="space-y-5">
+        <div className="space-y-4">
           {Object.entries(groupedTransactions).map(([dateGroup, items]) => (
-            <div key={dateGroup} className="space-y-2">
+            <div key={dateGroup} className="space-y-1.5">
               <div className="flex items-center justify-between px-2">
-                <span className="text-xs font-bold text-text-muted uppercase tracking-wider">{dateGroup}</span>
-                <span className="text-[11px] font-mono text-text-muted">{items.length} records</span>
+                <span className="text-[10px] font-bold text-text-muted uppercase tracking-wider">{dateGroup}</span>
+                <span className="text-[10px] font-mono text-text-muted">{items.length} records</span>
               </div>
 
-              <div className="bg-surface-white rounded-2xl border border-border-subtle divide-y divide-border-subtle overflow-hidden shadow-sm">
+              <div className="bg-surface-white rounded-2xl border border-border-subtle divide-y divide-border-subtle overflow-hidden shadow-xs">
                 {items.map(tx => (
                   <div
                     key={tx.id}
-                    className="p-3 sm:p-4 flex items-center justify-between hover:bg-surface-muted/40 transition-colors group cursor-pointer"
+                    className="p-3 flex items-center justify-between hover:bg-surface-muted/40 transition-colors cursor-pointer"
                     onClick={() => setEditingTx(tx)}
                   >
-                    <div className="flex items-center gap-2.5 sm:gap-3 min-w-0 pr-2">
-                      <div className={`w-9 h-9 sm:w-10 sm:h-10 rounded-xl flex items-center justify-center text-white shrink-0 ${
+                    <div className="flex items-center gap-2.5 min-w-0 pr-2">
+                      <div className={`w-8 h-8 rounded-lg flex items-center justify-center text-white shrink-0 ${
                         tx.type === 'income' ? 'bg-emerald-600' : tx.type === 'transfer' ? 'bg-blue-600' : 'bg-primary'
                       }`}>
-                        <span className="material-symbols-outlined text-[18px] sm:text-[20px]">{getCategoryIcon(tx.category_id)}</span>
+                        <span className="material-symbols-outlined text-[18px]">{getCategoryIcon(tx.category_id)}</span>
                       </div>
                       <div className="min-w-0">
-                        <h4 className="font-semibold text-xs sm:text-sm text-text-primary truncate">
+                        <h4 className="font-semibold text-xs text-text-primary truncate">
                           {tx.description || tx.merchant || getCategoryName(tx.category_id)}
                         </h4>
-                        <p className="text-[11px] text-text-muted flex items-center gap-1.5 mt-0.5 truncate">
-                          <span className="truncate">{getCategoryName(tx.category_id)}</span>
-                          <span>•</span>
-                          <span className="truncate">{getAccountName(tx.account_id)}</span>
+                        {/* P1 FIX: Always shows precise account name e.g. "Food • UPI" */}
+                        <p className="text-[10px] text-text-muted truncate">
+                          {getCategoryName(tx.category_id)} • {getAccountName(tx.account_id)}
                         </p>
                       </div>
                     </div>
 
-                    <div className="flex items-center gap-2 sm:gap-3 shrink-0">
+                    <div className="flex items-center gap-2.5 shrink-0">
                       <div className="text-right">
-                        <span className={`font-mono font-bold text-xs sm:text-sm ${
+                        <span className={`font-mono font-bold text-xs ${
                           tx.type === 'income' ? 'text-emerald-700' : tx.type === 'transfer' ? 'text-blue-600' : 'text-text-primary'
                         }`}>
                           {tx.type === 'income' ? '+' : tx.type === 'transfer' ? '↔' : '-'}{formatCurrency(tx.amount)}
                         </span>
-                        <p className="text-[10px] text-text-muted">{tx.time}</p>
+                        <p className="text-[9px] text-text-muted">{tx.time}</p>
                       </div>
 
                       <button
@@ -215,10 +216,10 @@ export const TransactionsScreen: React.FC = () => {
                           e.stopPropagation();
                           deleteTransaction(tx.id);
                         }}
-                        className="w-7 h-7 sm:w-8 sm:h-8 rounded-full flex items-center justify-center text-text-muted hover:text-danger-coral hover:bg-danger-tint transition-all"
+                        className="w-7 h-7 rounded-full flex items-center justify-center text-text-muted hover:text-danger-coral hover:bg-danger-tint transition-all"
                         title="Delete Transaction"
                       >
-                        <span className="material-symbols-outlined text-[16px] sm:text-[18px]">delete</span>
+                        <span className="material-symbols-outlined text-[16px]">delete</span>
                       </button>
                     </div>
                   </div>
@@ -229,12 +230,12 @@ export const TransactionsScreen: React.FC = () => {
         </div>
       )}
 
-      {/* Edit Drawer Modal */}
+      {/* Edit Modal */}
       {editingTx && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-text-primary/60 backdrop-blur-md">
-          <div className="bg-surface-white w-full max-w-md rounded-3xl border border-border-subtle p-5 sm:p-6 shadow-2xl space-y-4">
+          <div className="bg-surface-white w-full max-w-md rounded-3xl border border-border-subtle p-5 shadow-2xl space-y-4">
             <div className="flex items-center justify-between border-b border-border-subtle pb-3">
-              <h3 className="font-bold text-base sm:text-lg text-text-primary">Edit Transaction</h3>
+              <h3 className="font-bold text-base text-text-primary">Edit Transaction</h3>
               <button onClick={() => setEditingTx(null)} className="text-text-muted hover:text-text-primary">
                 <span className="material-symbols-outlined">close</span>
               </button>
@@ -248,7 +249,7 @@ export const TransactionsScreen: React.FC = () => {
                   step="any"
                   value={editingTx.amount}
                   onChange={e => setEditingTx({ ...editingTx, amount: parseFloat(e.target.value) || 0 })}
-                  className="w-full p-2.5 bg-surface border border-border-subtle rounded-xl font-mono text-base sm:text-lg font-bold"
+                  className="w-full p-2.5 bg-surface border border-border-subtle rounded-xl font-mono text-base font-bold"
                   required
                 />
               </div>
@@ -276,14 +277,14 @@ export const TransactionsScreen: React.FC = () => {
               <div className="flex gap-2 pt-2">
                 <button
                   type="submit"
-                  className="flex-1 py-2.5 rounded-xl bg-primary text-on-primary font-bold text-xs sm:text-sm shadow-sm"
+                  className="flex-1 py-2.5 rounded-xl bg-primary text-on-primary font-bold text-xs shadow-sm"
                 >
                   Save Changes
                 </button>
                 <button
                   type="button"
                   onClick={() => setEditingTx(null)}
-                  className="px-4 py-2.5 rounded-xl bg-surface-muted text-text-secondary font-semibold text-xs sm:text-sm"
+                  className="px-4 py-2.5 rounded-xl bg-surface-muted text-text-secondary font-semibold text-xs"
                 >
                   Cancel
                 </button>

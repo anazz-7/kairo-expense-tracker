@@ -36,7 +36,6 @@ export const BudgetsScreen: React.FC = () => {
 
   const formatCurrency = (val: number) => `${user.currency}${val.toLocaleString('en-IN')}`;
 
-  // Calculate actual category spending for current month
   const now = new Date();
   const currentMonthKey = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
 
@@ -95,47 +94,47 @@ export const BudgetsScreen: React.FC = () => {
   };
 
   return (
-    <div className="flex flex-col space-y-8 max-w-5xl mx-auto pb-24 md:pb-8">
+    <div className="flex flex-col space-y-6 max-w-4xl mx-auto pb-20 md:pb-8 pt-2">
       {/* Page Header */}
       <div className="flex items-center justify-between">
         <div>
-          <h2 className="font-bold text-2xl text-text-primary tracking-tight">Accounts & Budgets</h2>
-          <p className="text-xs text-text-muted">Manage balances, transfers, and monthly spending caps</p>
+          <h2 className="font-bold text-xl sm:text-2xl text-text-primary tracking-tight">Accounts & Budgets</h2>
+          <p className="text-xs text-text-muted">Manage balances, transfers, and monthly spending budgets</p>
         </div>
         <div className="flex items-center gap-2">
           <button
             onClick={() => setShowTransferModal(true)}
-            className="px-3.5 py-2 rounded-xl bg-emerald-tint text-primary border border-primary/30 font-semibold text-xs flex items-center gap-1.5 hover:bg-emerald-light/50 transition-all"
+            className="px-3 py-1.5 rounded-xl bg-emerald-tint text-primary border border-primary/30 font-semibold text-xs flex items-center gap-1 hover:bg-emerald-light/50 transition-all"
           >
-            <span className="material-symbols-outlined text-[18px]">swap_horiz</span>
+            <span className="material-symbols-outlined text-[16px]">swap_horiz</span>
             <span>Transfer</span>
           </button>
           <button
             onClick={() => setShowAddAccountModal(true)}
-            className="px-3.5 py-2 rounded-xl bg-primary text-on-primary font-semibold text-xs flex items-center gap-1.5 shadow-sm hover:bg-primary-container transition-all"
+            className="px-3 py-1.5 rounded-xl bg-primary text-on-primary font-semibold text-xs flex items-center gap-1 shadow-xs hover:bg-primary-container transition-all"
           >
-            <span className="material-symbols-outlined text-[18px]">add</span>
+            <span className="material-symbols-outlined text-[16px]">add</span>
             <span>Add Account</span>
           </button>
         </div>
       </div>
 
       {/* SECTION 1: ACCOUNTS */}
-      <div className="space-y-3">
-        <h3 className="font-bold text-lg text-text-primary">Accounts & Wallets</h3>
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+      <div className="space-y-2.5">
+        <h3 className="font-bold text-base text-text-primary">Accounts & Wallets</h3>
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
           {accounts.map(acc => (
-            <div key={acc.id} className="bg-surface-white p-5 rounded-2xl border border-border-subtle shadow-sm flex flex-col justify-between space-y-3">
+            <div key={acc.id} className="bg-surface-white p-4 rounded-2xl border border-border-subtle shadow-xs flex flex-col justify-between space-y-2">
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-2">
-                  <div className="w-9 h-9 rounded-xl bg-emerald-tint text-primary flex items-center justify-center font-bold">
-                    <span className="material-symbols-outlined text-[20px]">
+                  <div className="w-8 h-8 rounded-xl bg-emerald-tint text-primary flex items-center justify-center font-bold">
+                    <span className="material-symbols-outlined text-[18px]">
                       {acc.type === 'Cash' ? 'payments' : acc.type === 'UPI' ? 'qr_code' : acc.type === 'Credit Card' ? 'credit_card' : 'account_balance'}
                     </span>
                   </div>
                   <div>
-                    <h4 className="font-semibold text-sm text-text-primary">{acc.name}</h4>
-                    <span className="text-[10px] text-text-muted uppercase tracking-wider">{acc.type}</span>
+                    <h4 className="font-semibold text-xs text-text-primary">{acc.name}</h4>
+                    <span className="text-[9px] text-text-muted uppercase tracking-wider">{acc.type}</span>
                   </div>
                 </div>
                 <button
@@ -143,76 +142,91 @@ export const BudgetsScreen: React.FC = () => {
                   className="text-text-muted hover:text-danger-coral transition-colors p-1"
                   title="Delete Account"
                 >
-                  <span className="material-symbols-outlined text-[18px]">delete</span>
+                  <span className="material-symbols-outlined text-[16px]">delete</span>
                 </button>
               </div>
 
               <div>
-                <span className="text-[10px] uppercase font-bold text-text-muted">Current Balance</span>
-                <h4 className="text-2xl font-bold font-mono text-text-primary tracking-tight">{formatCurrency(acc.current_balance)}</h4>
+                <span className="text-[9px] uppercase font-bold text-text-muted">Current Balance</span>
+                <h4 className="text-xl font-bold font-mono text-text-primary tracking-tight">{formatCurrency(acc.current_balance)}</h4>
               </div>
             </div>
           ))}
         </div>
       </div>
 
-      {/* SECTION 2: BUDGETS */}
-      <div className="space-y-4">
+      {/* SECTION 2: BUDGETS — P0 FIX: 4-tier threshold states and remaining amount display */}
+      <div className="space-y-3">
         <div className="flex items-center justify-between">
           <div>
-            <h3 className="font-bold text-lg text-text-primary">Monthly Budgets</h3>
-            <p className="text-xs text-text-muted">Visual threshold alerts: Normal (&lt;70%), Warning (70-90%), Exceeded (&ge;100%)</p>
+            <h3 className="font-bold text-base text-text-primary">Monthly Budgets</h3>
+            <p className="text-xs text-text-muted">Status: Normal (0-69%), Watch (70-89%), Near Limit (90-99%), Over Budget (≥100%)</p>
           </div>
           <button
             onClick={() => setShowBudgetModal(true)}
-            className="px-3.5 py-1.5 rounded-xl bg-surface-white text-text-primary border border-border-subtle font-semibold text-xs hover:bg-surface-muted transition-all"
+            className="px-3 py-1.5 rounded-xl bg-surface-white text-text-primary border border-border-subtle font-semibold text-xs hover:bg-surface-muted transition-all"
           >
-            Set Budget Cap
+            Set Budget
           </button>
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-3.5">
           {budgets.map(bgt => {
             const isOverall = !bgt.category_id;
             const category = categories.find(c => c.id === bgt.category_id);
             const title = isOverall ? 'Overall Monthly Budget' : category?.name || 'Category Budget';
             const spent = isOverall ? overallSpend : (categorySpendMap.get(bgt.category_id!) || 0);
-            const pct = Math.min(100, Math.round((spent / bgt.amount) * 100));
+            const remaining = bgt.amount - spent;
+            const ratio = spent / (bgt.amount || 1);
+            const pct = Math.min(100, Math.round(ratio * 100));
 
-            let statusColor = 'bg-primary text-on-primary';
-            let statusText = 'Normal';
+            // P0 FIX: 4-tier budget status threshold states
+            let statusColor = 'bg-emerald-tint text-primary border border-primary/20';
+            let statusText = '🟢 Normal';
             let barColor = 'bg-primary';
 
-            if (spent >= bgt.amount) {
+            if (ratio >= 1.0) {
               statusColor = 'bg-error text-on-error';
-              statusText = 'Exceeded';
+              statusText = '🔴 Over Budget';
               barColor = 'bg-error';
-            } else if (spent / bgt.amount >= 0.7) {
-              statusColor = 'bg-danger-tint text-danger-coral';
-              statusText = 'Approaching Limit';
+            } else if (ratio >= 0.90) {
+              statusColor = 'bg-danger-tint text-danger-coral border border-danger-coral/30';
+              statusText = '🟠 Near Limit';
               barColor = 'bg-danger-coral';
+            } else if (ratio >= 0.70) {
+              statusColor = 'bg-amber-100 text-amber-800 border border-amber-300';
+              statusText = '🟡 Watch';
+              barColor = 'bg-amber-500';
             }
 
             return (
-              <div key={bgt.id} className="bg-surface-white p-5 rounded-2xl border border-border-subtle shadow-sm space-y-3">
+              <div key={bgt.id} className="bg-surface-white p-4 rounded-2xl border border-border-subtle shadow-xs space-y-2.5">
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-2">
-                    <span className="material-symbols-outlined text-primary text-[22px]">
+                    <span className="material-symbols-outlined text-primary text-[20px]">
                       {category?.icon || 'tune'}
                     </span>
-                    <h4 className="font-bold text-base text-text-primary">{title}</h4>
+                    <h4 className="font-bold text-sm text-text-primary">{title}</h4>
                   </div>
-                  <span className={`px-2.5 py-0.5 rounded-full text-[11px] font-bold ${statusColor}`}>
+                  <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${statusColor}`}>
                     {statusText}
                   </span>
                 </div>
 
-                <div className="flex items-baseline justify-between pt-1">
-                  <span className="font-mono text-xl font-bold text-text-primary">{formatCurrency(spent)}</span>
-                  <span className="font-mono text-xs text-text-muted">Target: {formatCurrency(bgt.amount)}</span>
+                <div className="flex items-baseline justify-between pt-0.5">
+                  <div>
+                    <span className="font-mono text-base font-bold text-text-primary">{formatCurrency(spent)} spent</span>
+                    <span className="text-[10px] text-text-muted block">Budget: {formatCurrency(bgt.amount)}</span>
+                  </div>
+                  <div className="text-right">
+                    <span className={`font-mono text-xs font-bold ${remaining < 0 ? 'text-error' : 'text-primary'}`}>
+                      {remaining >= 0 ? `${formatCurrency(remaining)} remaining` : `${formatCurrency(Math.abs(remaining))} over`}
+                    </span>
+                    <span className="text-[10px] text-text-muted block">{pct}% used</span>
+                  </div>
                 </div>
 
-                <div className="w-full bg-surface-muted h-2.5 rounded-full overflow-hidden">
+                <div className="w-full bg-surface-muted h-2 rounded-full overflow-hidden">
                   <div className={`h-full rounded-full transition-all duration-500 ${barColor}`} style={{ width: `${pct}%` }} />
                 </div>
               </div>
@@ -224,15 +238,15 @@ export const BudgetsScreen: React.FC = () => {
       {/* Add Account Modal */}
       {showAddAccountModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-text-primary/60 backdrop-blur-md">
-          <div className="bg-surface-white w-full max-w-md rounded-3xl border border-border-subtle p-6 shadow-2xl space-y-4">
+          <div className="bg-surface-white w-full max-w-md rounded-3xl border border-border-subtle p-5 shadow-2xl space-y-4">
             <div className="flex items-center justify-between border-b border-border-subtle pb-3">
-              <h3 className="font-bold text-lg text-text-primary">Add New Account</h3>
+              <h3 className="font-bold text-base text-text-primary">Add New Account</h3>
               <button onClick={() => setShowAddAccountModal(false)} className="text-text-muted">
                 <span className="material-symbols-outlined">close</span>
               </button>
             </div>
 
-            <form onSubmit={handleCreateAccount} className="space-y-4">
+            <form onSubmit={handleCreateAccount} className="space-y-3.5">
               <div>
                 <label className="block text-xs font-semibold text-text-muted mb-1">Account Name</label>
                 <input
@@ -274,7 +288,7 @@ export const BudgetsScreen: React.FC = () => {
 
               <button
                 type="submit"
-                className="w-full py-3 rounded-xl bg-primary text-on-primary font-bold text-sm shadow-sm"
+                className="w-full py-2.5 rounded-xl bg-primary text-on-primary font-bold text-xs shadow-xs"
               >
                 Create Account
               </button>
@@ -286,15 +300,15 @@ export const BudgetsScreen: React.FC = () => {
       {/* Account Transfer Modal */}
       {showTransferModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-text-primary/60 backdrop-blur-md">
-          <div className="bg-surface-white w-full max-w-md rounded-3xl border border-border-subtle p-6 shadow-2xl space-y-4">
+          <div className="bg-surface-white w-full max-w-md rounded-3xl border border-border-subtle p-5 shadow-2xl space-y-4">
             <div className="flex items-center justify-between border-b border-border-subtle pb-3">
-              <h3 className="font-bold text-lg text-text-primary">Transfer Funds Between Accounts</h3>
+              <h3 className="font-bold text-base text-text-primary">Transfer Funds Between Accounts</h3>
               <button onClick={() => setShowTransferModal(false)} className="text-text-muted">
                 <span className="material-symbols-outlined">close</span>
               </button>
             </div>
 
-            <form onSubmit={handleTransfer} className="space-y-4">
+            <form onSubmit={handleTransfer} className="space-y-3.5">
               <div>
                 <label className="block text-xs font-semibold text-text-muted mb-1">From Account</label>
                 <select
@@ -329,14 +343,14 @@ export const BudgetsScreen: React.FC = () => {
                   placeholder="0.00"
                   value={transferAmount}
                   onChange={e => setTransferAmount(e.target.value)}
-                  className="w-full p-2.5 bg-surface border border-border-subtle rounded-xl font-mono text-lg font-bold"
+                  className="w-full p-2.5 bg-surface border border-border-subtle rounded-xl font-mono text-base font-bold"
                   required
                 />
               </div>
 
               <button
                 type="submit"
-                className="w-full py-3 rounded-xl bg-primary text-on-primary font-bold text-sm shadow-sm"
+                className="w-full py-2.5 rounded-xl bg-primary text-on-primary font-bold text-xs shadow-xs"
               >
                 Execute Transfer
               </button>
@@ -348,15 +362,15 @@ export const BudgetsScreen: React.FC = () => {
       {/* Set Budget Modal */}
       {showBudgetModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-text-primary/60 backdrop-blur-md">
-          <div className="bg-surface-white w-full max-w-md rounded-3xl border border-border-subtle p-6 shadow-2xl space-y-4">
+          <div className="bg-surface-white w-full max-w-md rounded-3xl border border-border-subtle p-5 shadow-2xl space-y-4">
             <div className="flex items-center justify-between border-b border-border-subtle pb-3">
-              <h3 className="font-bold text-lg text-text-primary">Set Category Budget Cap</h3>
+              <h3 className="font-bold text-base text-text-primary">Set Category Budget</h3>
               <button onClick={() => setShowBudgetModal(false)} className="text-text-muted">
                 <span className="material-symbols-outlined">close</span>
               </button>
             </div>
 
-            <form onSubmit={handleSaveBudgetSubmit} className="space-y-4">
+            <form onSubmit={handleSaveBudgetSubmit} className="space-y-3.5">
               <div>
                 <label className="block text-xs font-semibold text-text-muted mb-1">Category / Scope</label>
                 <select
@@ -372,20 +386,20 @@ export const BudgetsScreen: React.FC = () => {
               </div>
 
               <div>
-                <label className="block text-xs font-semibold text-text-muted mb-1">Monthly Limit (Cap)</label>
+                <label className="block text-xs font-semibold text-text-muted mb-1">Monthly Budget Limit</label>
                 <input
                   type="number"
                   step="any"
                   value={budgetAmountInput}
                   onChange={e => setBudgetAmountInput(e.target.value)}
-                  className="w-full p-2.5 bg-surface border border-border-subtle rounded-xl font-mono text-lg font-bold"
+                  className="w-full p-2.5 bg-surface border border-border-subtle rounded-xl font-mono text-base font-bold"
                   required
                 />
               </div>
 
               <button
                 type="submit"
-                className="w-full py-3 rounded-xl bg-primary text-on-primary font-bold text-sm shadow-sm"
+                className="w-full py-2.5 rounded-xl bg-primary text-on-primary font-bold text-xs shadow-xs"
               >
                 Save Budget
               </button>
