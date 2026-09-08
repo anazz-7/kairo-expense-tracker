@@ -1,5 +1,5 @@
 export interface ShakeOptions {
-  sensitivity: number; // 1 (low, high threshold = 25), 2 (medium, threshold = 18), 3 (high, threshold = 12)
+  sensitivity: number; // 1 (low, threshold = 25), 2 (medium, threshold = 18), 3 (high, threshold = 12)
   cooldownMs?: number;
   onShake: () => void;
   onPermissionDenied?: (err: Error) => void;
@@ -17,6 +17,10 @@ export class ShakeDetector {
   private lastY: number | null = null;
   private lastZ: number | null = null;
 
+  // Multi-peak false-positive protection buffer
+  private peakTimestamps: number[] = [];
+  private readonly peakWindowMs: number = 600; // 600ms window for 3 rapid direction changes
+
   constructor(options: ShakeOptions) {
     this.threshold = this.getThreshold(options.sensitivity);
     this.cooldownMs = options.cooldownMs ?? 1500;
@@ -26,10 +30,10 @@ export class ShakeDetector {
 
   private getThreshold(sensitivity: number): number {
     switch (sensitivity) {
-      case 3: return 12; // High sensitivity (easy shake)
-      case 1: return 25; // Low sensitivity (hard shake)
+      case 3: return 12; // High sensitivity
+      case 1: return 25; // Low sensitivity
       case 2:
-      default: return 18; // Medium sensitivity (default)
+      default: return 18; // Medium sensitivity
     }
   }
 
@@ -40,7 +44,6 @@ export class ShakeDetector {
   public async requestPermission(): Promise<boolean> {
     if (typeof window === 'undefined') return false;
 
-    // Check if iOS DeviceMotionEvent permission API exists
     const DeviceMotionEventTyped = window.DeviceMotionEvent as unknown as {
       requestPermission?: () => Promise<'granted' | 'denied' | 'default'>;
     };
@@ -62,7 +65,7 @@ export class ShakeDetector {
         return false;
       }
     }
-    return true; // Non-iOS or older browsers auto-grant
+    return true;
   }
 
   public async start() {
@@ -107,13 +110,24 @@ export class ShakeDetector {
     const deltaZ = Math.abs(z - this.lastZ);
 
     const speed = deltaX + deltaY + deltaZ;
+    const now = Date.now();
 
+    // Check if motion exceeds acceleration threshold
     if (speed > this.threshold) {
-      const now = Date.now();
-      if (now - this.lastShakeTime > this.cooldownMs) {
-        this.lastShakeTime = now;
-        this.triggerHaptic();
-        this.onShake();
+      // Add peak timestamp to rolling buffer
+      this.peakTimestamps.push(now);
+
+      // Clean out peaks older than peakWindowMs
+      this.peakTimestamps = this.peakTimestamps.filter(t => now - t <= this.peakWindowMs);
+
+      // Require 3 rapid peak crossings to confirm true shake movement (filters out walking / table bumps)
+      if (this.peakTimestamps.length >= 3) {
+        if (now - this.lastShakeTime > this.cooldownMs) {
+          this.lastShakeTime = now;
+          this.peakTimestamps = [];
+          this.triggerHaptic();
+          this.onShake();
+        }
       }
     }
 
@@ -132,7 +146,7 @@ export class ShakeDetector {
     }
   }
 
-  // Simulator helper for desktop / manual testing
+  // Simulator helper for desktop testing
   public simulateShake() {
     const now = Date.now();
     if (now - this.lastShakeTime > this.cooldownMs) {

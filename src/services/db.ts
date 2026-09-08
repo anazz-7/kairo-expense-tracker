@@ -1,4 +1,4 @@
-import { Account, Budget, Category, RecurringTransaction, Transaction, User, VoiceSettings } from '../types';
+import { Account, Budget, Category, getLocalDateString, RecurringTransaction, Transaction, User, VoiceSettings } from '../types';
 
 const STORAGE_KEYS = {
   USER: 'kairo_user',
@@ -20,10 +20,10 @@ const SEED_USER: User = {
 };
 
 const SEED_ACCOUNTS: Account[] = [
-  { id: 'acc-cash', user_id: 'usr-1', name: 'Cash', type: 'Cash', opening_balance: 15000, current_balance: 14820, created_at: new Date().toISOString() },
-  { id: 'acc-bank', user_id: 'usr-1', name: 'HDFC Bank', type: 'Bank', opening_balance: 75000, current_balance: 145000, created_at: new Date().toISOString() },
-  { id: 'acc-upi', user_id: 'usr-1', name: 'GPay / UPI', type: 'UPI', opening_balance: 25000, current_balance: 33050, created_at: new Date().toISOString() },
-  { id: 'acc-card', user_id: 'usr-1', name: 'Axis Credit Card', type: 'Credit Card', opening_balance: -5000, current_balance: -8049, created_at: new Date().toISOString() },
+  { id: 'acc-cash', user_id: 'usr-1', name: 'Cash', type: 'Cash', opening_balance: 15000, current_balance: 15000, created_at: new Date().toISOString() },
+  { id: 'acc-bank', user_id: 'usr-1', name: 'HDFC Bank', type: 'Bank', opening_balance: 75000, current_balance: 75000, created_at: new Date().toISOString() },
+  { id: 'acc-upi', user_id: 'usr-1', name: 'GPay / UPI', type: 'UPI', opening_balance: 25000, current_balance: 25000, created_at: new Date().toISOString() },
+  { id: 'acc-card', user_id: 'usr-1', name: 'Axis Credit Card', type: 'Credit Card', opening_balance: -5000, current_balance: -5000, created_at: new Date().toISOString() },
   { id: 'acc-wallet', user_id: 'usr-1', name: 'Paytm Wallet', type: 'Wallet', opening_balance: 4500, current_balance: 4500, created_at: new Date().toISOString() },
 ];
 
@@ -43,8 +43,10 @@ const SEED_CATEGORIES: Category[] = [
   { id: 'cat-other', user_id: 'usr-1', name: 'Other', type: 'expense', icon: 'category', color: '#94A3B8', created_at: new Date().toISOString() },
 ];
 
-const nowISO = new Date().toISOString().split('T')[0];
-const yesterdayISO = new Date(Date.now() - 86400000).toISOString().split('T')[0];
+const todayLocalDate = getLocalDateString(new Date());
+const yesterdayObj = new Date();
+yesterdayObj.setDate(yesterdayObj.getDate() - 1);
+const yesterdayLocalDate = getLocalDateString(yesterdayObj);
 
 const SEED_TRANSACTIONS: Transaction[] = [
   {
@@ -56,7 +58,7 @@ const SEED_TRANSACTIONS: Transaction[] = [
     amount: 85000,
     merchant: 'Acme Corp',
     description: 'Monthly Salary Credit',
-    date: nowISO,
+    date: todayLocalDate,
     time: '09:00',
     created_at: new Date().toISOString(),
     updated_at: new Date().toISOString(),
@@ -70,7 +72,7 @@ const SEED_TRANSACTIONS: Transaction[] = [
     amount: 15000,
     merchant: 'Landlord',
     description: 'Apartment Rent Nov',
-    date: nowISO,
+    date: todayLocalDate,
     time: '10:15',
     created_at: new Date().toISOString(),
     updated_at: new Date().toISOString(),
@@ -84,7 +86,7 @@ const SEED_TRANSACTIONS: Transaction[] = [
     amount: 2400,
     merchant: 'Amazon',
     description: 'Wireless Headphones',
-    date: nowISO,
+    date: todayLocalDate,
     time: '14:30',
     created_at: new Date().toISOString(),
     updated_at: new Date().toISOString(),
@@ -98,7 +100,7 @@ const SEED_TRANSACTIONS: Transaction[] = [
     amount: 1500,
     merchant: 'Shell',
     description: 'Petrol Fill Up',
-    date: nowISO,
+    date: todayLocalDate,
     time: '17:45',
     created_at: new Date().toISOString(),
     updated_at: new Date().toISOString(),
@@ -112,7 +114,7 @@ const SEED_TRANSACTIONS: Transaction[] = [
     amount: 450,
     merchant: 'KFC',
     description: 'Dinner with friends',
-    date: nowISO,
+    date: todayLocalDate,
     time: '20:10',
     created_at: new Date().toISOString(),
     updated_at: new Date().toISOString(),
@@ -126,7 +128,7 @@ const SEED_TRANSACTIONS: Transaction[] = [
     amount: 180,
     merchant: 'Starbucks',
     description: 'Morning Coffee',
-    date: yesterdayISO,
+    date: yesterdayLocalDate,
     time: '08:30',
     created_at: new Date().toISOString(),
     updated_at: new Date().toISOString(),
@@ -140,7 +142,7 @@ const SEED_TRANSACTIONS: Transaction[] = [
     amount: 649,
     merchant: 'Netflix',
     description: 'Premium Plan Subscription',
-    date: yesterdayISO,
+    date: yesterdayLocalDate,
     time: '12:00',
     created_at: new Date().toISOString(),
     updated_at: new Date().toISOString(),
@@ -154,7 +156,7 @@ const SEED_TRANSACTIONS: Transaction[] = [
     type: 'transfer',
     amount: 10000,
     description: 'Fund UPI Wallet from HDFC',
-    date: yesterdayISO,
+    date: yesterdayLocalDate,
     time: '15:00',
     created_at: new Date().toISOString(),
     updated_at: new Date().toISOString(),
@@ -162,10 +164,10 @@ const SEED_TRANSACTIONS: Transaction[] = [
 ];
 
 const SEED_BUDGETS: Budget[] = [
-  { id: 'bgt-overall', user_id: 'usr-1', amount: 60000, period: 'monthly', start_date: nowISO },
-  { id: 'bgt-food', user_id: 'usr-1', category_id: 'cat-food', amount: 8000, period: 'monthly', start_date: nowISO },
-  { id: 'bgt-shopping', user_id: 'usr-1', category_id: 'cat-shopping', amount: 5000, period: 'monthly', start_date: nowISO },
-  { id: 'bgt-travel', user_id: 'usr-1', category_id: 'cat-travel', amount: 6000, period: 'monthly', start_date: nowISO },
+  { id: 'bgt-overall', user_id: 'usr-1', amount: 60000, period: 'monthly', start_date: todayLocalDate },
+  { id: 'bgt-food', user_id: 'usr-1', category_id: 'cat-food', amount: 8000, period: 'monthly', start_date: todayLocalDate },
+  { id: 'bgt-shopping', user_id: 'usr-1', category_id: 'cat-shopping', amount: 5000, period: 'monthly', start_date: todayLocalDate },
+  { id: 'bgt-travel', user_id: 'usr-1', category_id: 'cat-travel', amount: 6000, period: 'monthly', start_date: todayLocalDate },
 ];
 
 const SEED_RECURRING: RecurringTransaction[] = [
@@ -177,8 +179,8 @@ const SEED_RECURRING: RecurringTransaction[] = [
     type: 'expense',
     amount: 15000,
     frequency: 'monthly',
-    next_date: '2026-10-01',
-    start_date: '2026-01-01',
+    next_date: `${todayLocalDate.slice(0, 7)}-01`,
+    start_date: `${todayLocalDate.slice(0, 4)}-01-01`,
     description: 'Apartment Rent',
     active: true,
   },
@@ -190,8 +192,8 @@ const SEED_RECURRING: RecurringTransaction[] = [
     type: 'expense',
     amount: 649,
     frequency: 'monthly',
-    next_date: '2026-10-05',
-    start_date: '2026-01-05',
+    next_date: `${todayLocalDate.slice(0, 7)}-05`,
+    start_date: `${todayLocalDate.slice(0, 4)}-01-05`,
     description: 'Netflix Premium',
     active: true,
   },
@@ -199,7 +201,7 @@ const SEED_RECURRING: RecurringTransaction[] = [
 
 const SEED_SETTINGS: VoiceSettings = {
   autoSave: true,
-  confidenceThreshold: 0.8,
+  confidenceThreshold: 0.85,
   shakeSensitivity: 2,
   shakeEnabled: true,
   soundEffects: true,

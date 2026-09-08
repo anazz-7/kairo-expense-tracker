@@ -1,4 +1,4 @@
-import { Account, Category, ParsedExpense, Transaction } from '../types';
+import { Account, Category, getLocalDateString, getLocalTimeString, ParsedExpense, Transaction } from '../types';
 import { parseVoiceExpense } from './voiceParser';
 
 export interface SiriIntentResponse {
@@ -22,12 +22,13 @@ export class SiriIntentsService {
     this.categoriesProvider = getCats;
     this.accountsProvider = getAccs;
 
-    // Attach to window object for external Siri / App Intents / Web Share / PWA triggers
+    // Expose window.KairoExpenseApp as Web Intent Bridge for iOS Shortcuts & Web Share Target
     if (typeof window !== 'undefined') {
       (window as any).KairoExpenseApp = {
         addExpenseFromIntent: (textOrPayload: string | Partial<ParsedExpense>) => this.handleIntentAdd(textOrPayload),
         parseVoice: (text: string) => this.handleIntentParse(text),
-        version: '1.0.0',
+        version: '1.2.0',
+        bridgeType: 'Siri Shortcuts & Web Intent Bridge',
       };
     }
   }
@@ -54,15 +55,15 @@ export class SiriIntentsService {
       const cats = this.categoriesProvider ? this.categoriesProvider() : [];
       const accs = this.accountsProvider ? this.accountsProvider() : [];
       parsed = {
-        amount: textOrPayload.amount ?? 0,
+        amount: textOrPayload.amount ?? null,
         categoryName: textOrPayload.categoryName ?? 'Other',
         categoryId: textOrPayload.categoryId ?? (cats[0]?.id || 'cat-1'),
         merchant: textOrPayload.merchant || null,
-        description: textOrPayload.description || 'Siri Expense',
+        description: textOrPayload.description || 'Intent Expense',
         accountName: textOrPayload.accountName || 'UPI',
         accountId: textOrPayload.accountId || (accs[0]?.id || 'acc-1'),
-        date: textOrPayload.date || new Date().toISOString().split('T')[0],
-        time: textOrPayload.time || '12:00',
+        date: textOrPayload.date || getLocalDateString(),
+        time: textOrPayload.time || getLocalTimeString(),
         type: textOrPayload.type || 'expense',
         confidence: 'high',
         confidenceScore: 1.0,
@@ -71,10 +72,11 @@ export class SiriIntentsService {
       };
     }
 
+    // Strict validation: Reject zero or missing amount
     if (!parsed.amount || parsed.amount <= 0) {
       return {
         success: false,
-        message: 'Could not extract valid amount from input.',
+        message: 'Could not extract a valid expense amount from input.',
         parsedExpense: parsed,
       };
     }

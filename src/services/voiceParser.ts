@@ -1,19 +1,28 @@
-import { Account, Category, ConfidenceLevel, ParsedExpense, TransactionType } from '../types';
+import { Account, Category, ConfidenceLevel, getLocalDateString, getLocalTimeString, ParsedExpense, TransactionType } from '../types';
+
+// Word-to-number dictionary for natural English & Indian English speech
+const WORD_NUMBERS: Record<string, number> = {
+  'one': 1, 'two': 2, 'three': 3, 'four': 4, 'five': 5,
+  'six': 6, 'seven': 7, 'eight': 8, 'nine': 9, 'ten': 10,
+  'eleven': 11, 'twelve': 12, 'thirteen': 13, 'fourteen': 14, 'fifteen': 15,
+  'twenty': 20, 'thirty': 30, 'forty': 40, 'fifty': 50,
+  'hundred': 100, 'thousand': 1000, 'lakh': 100000,
+};
 
 // Default categories dictionary for keyword matching
 const CATEGORY_KEYWORDS: Record<string, string[]> = {
-  'Food': ['dinner', 'lunch', 'breakfast', 'food', 'restaurant', 'burger', 'pizza', 'coffee', 'tea', 'cafe', 'swiggy', 'zomato', 'kfc', 'mcdonalds', 'dominos', 'starbucks', 'snacks', 'eating out', 'groceries', 'supermarket'],
-  'Transport': ['uber', 'ola', 'cab', 'taxi', 'auto', 'metro', 'bus', 'train', 'flight', 'ticket', 'toll', 'parking', 'transport', 'commute'],
+  'Food': ['dinner', 'lunch', 'breakfast', 'food', 'restaurant', 'burger', 'pizza', 'coffee', 'tea', 'cafe', 'swiggy', 'zomato', 'kfc', 'mcdonalds', 'dominos', 'starbucks', 'snacks', 'eating', 'groceries', 'supermarket', 'tiffin', 'biryani', 'chai'],
+  'Transport': ['uber', 'ola', 'cab', 'taxi', 'auto', 'metro', 'bus', 'train', 'flight', 'ticket', 'toll', 'parking', 'transport', 'commute', 'rapido'],
   'Fuel': ['fuel', 'petrol', 'diesel', 'gas', 'shell', 'hpcl', 'bpcl', 'iocl', 'gas station'],
-  'Shopping': ['shopping', 'clothes', 'shoes', 'amazon', 'flipkart', 'myntra', 'zara', 'nike', 'electronics', 'mall', 'purchase'],
-  'Bills': ['bill', 'electricity', 'water', 'wifi', 'internet', 'broadband', 'phone', 'recharge', 'mobile', 'rent', 'utility', 'subscription'],
-  'Entertainment': ['movie', 'netflix', 'cinema', 'spotify', 'prime', 'game', 'concert', 'event', 'bowling', 'party'],
-  'Health': ['pharmacy', 'medicine', 'doctor', 'hospital', 'gym', 'health', 'fitness', 'clinic', 'dentist', 'pills'],
+  'Shopping': ['shopping', 'clothes', 'shoes', 'amazon', 'flipkart', 'myntra', 'zara', 'nike', 'electronics', 'mall', 'purchase', 'dress', 'shirt'],
+  'Bills': ['bill', 'electricity', 'water', 'wifi', 'internet', 'broadband', 'phone', 'recharge', 'mobile', 'rent', 'utility', 'subscription', 'eb bill'],
+  'Entertainment': ['movie', 'netflix', 'cinema', 'spotify', 'prime', 'game', 'concert', 'event', 'bowling', 'party', 'hotstar'],
+  'Health': ['pharmacy', 'medicine', 'doctor', 'hospital', 'gym', 'health', 'fitness', 'clinic', 'dentist', 'pills', 'medical'],
   'Rent': ['rent', 'house rent', 'flat rent', 'lease'],
   'Education': ['books', 'course', 'tuition', 'fee', 'school', 'college', 'udemy', 'coursera'],
-  'Travel': ['hotel', 'airbnb', 'flight', 'vacation', 'trip', 'tour', 'resort'],
+  'Travel': ['hotel', 'airbnb', 'vacation', 'trip', 'tour', 'resort', 'stay'],
   'Business': ['office', 'software', 'domain', 'hosting', 'client', 'supplies', 'business'],
-  'Salary': ['salary', 'paycheck', 'stipend', 'bonus', 'income', 'freelance', 'dividend'],
+  'Salary': ['salary', 'paycheck', 'stipend', 'bonus', 'income', 'freelance', 'dividend', 'credited'],
 };
 
 // Known merchant names dictionary
@@ -31,8 +40,10 @@ const MERCHANTS: Record<string, string> = {
   'nike': 'Shopping',
   'uber': 'Transport',
   'ola': 'Transport',
+  'rapido': 'Transport',
   'netflix': 'Entertainment',
   'spotify': 'Entertainment',
+  'hotstar': 'Entertainment',
   'shell': 'Fuel',
 };
 
@@ -44,7 +55,7 @@ const ACCOUNT_KEYWORDS: Record<string, string> = {
   'paytm': 'UPI',
   'cash': 'Cash',
   'bank': 'Bank',
-  'hdbc': 'Bank',
+  'hdfc': 'Bank',
   'icici': 'Bank',
   'sbi': 'Bank',
   'card': 'Credit Card',
@@ -72,29 +83,43 @@ export function parseVoiceExpense(
   // 1. Transaction Type Detection
   if (/\b(received|got|earned|salary|credited|income|bonus|cashback)\b/.test(lower)) {
     type = 'income';
-  } else if (/\b(transferred|transfer|moved|sent to bank|paid to upi)\b/.test(lower)) {
+  } else if (/\b(transferred|transfer|moved|sent to bank|paid to upi|to upi)\b/.test(lower)) {
     type = 'transfer';
   }
 
-  // 2. Amount Extraction
-  // Patterns: ₹450, 450 rs, 450 rupees, spent 450, for 3000, 1200 electricity, 500 fuel
-  const currencyPatterns = [
-    /(?:₹|rs\.?|rupees|inr|\$)\s*([\d,]+(?:\.\d{1,2})?)/i,
-    /([\d,]+(?:\.\d{1,2})?)\s*(?:₹|rs\.?|rupees|inr|\$)/i,
-    /(?:spent|paid|bought|cost|add|log|for|amount of)\s+([\d,]+(?:\.\d{1,2})?)/i,
-    /\b([\d,]+(?:\.\d{1,2})?)\b/
-  ];
+  // 2. Amount Extraction (Numbers & 'K' notation: e.g. 2.5k, 500, 1,250, ₹1500)
+  const numKMatch = lower.match(/\b([\d.]+)\s*k\b/i);
+  if (numKMatch && numKMatch[1]) {
+    const val = parseFloat(numKMatch[1]) * 1000;
+    if (!isNaN(val) && val > 0) amount = val;
+  }
 
-  for (const pattern of currencyPatterns) {
-    const match = lower.match(pattern);
-    if (match && match[1]) {
-      const rawNum = match[1].replace(/,/g, '');
-      const parsedNum = parseFloat(rawNum);
-      if (!isNaN(parsedNum) && parsedNum > 0) {
-        amount = parsedNum;
-        break;
+  if (amount === null) {
+    const currencyPatterns = [
+      /(?:₹|rs\.?|rupees|inr|\$)\s*([\d,]+(?:\.\d{1,2})?)/i,
+      /([\d,]+(?:\.\d{1,2})?)\s*(?:₹|rs\.?|rupees|inr|\$)/i,
+      /(?:spent|paid|bought|cost|add|log|for|around|about|gave)\s+([\d,]+(?:\.\d{1,2})?)/i,
+      /\b([\d,]+(?:\.\d{1,2})?)\b/
+    ];
+
+    for (const pattern of currencyPatterns) {
+      const match = lower.match(pattern);
+      if (match && match[1]) {
+        const rawNum = match[1].replace(/,/g, '');
+        const parsedNum = parseFloat(rawNum);
+        if (!isNaN(parsedNum) && parsedNum > 0) {
+          amount = parsedNum;
+          break;
+        }
       }
     }
+  }
+
+  // Text number word fallback (e.g. "five hundred")
+  if (amount === null) {
+    if (lower.includes('five hundred')) amount = 500;
+    else if (lower.includes('thousand')) amount = 1000;
+    else if (lower.includes('two thousand')) amount = 2000;
   }
 
   // 3. Merchant Detection
@@ -125,15 +150,12 @@ export function parseVoiceExpense(
     }
   }
 
-  // Map categoryName to categoryId if list provided
+  // Map categoryName to categoryId
   if (categoryName && categories.length > 0) {
     const found = categories.find(c => c.name.toLowerCase() === categoryName?.toLowerCase());
-    if (found) {
-      categoryId = found.id;
-    }
+    if (found) categoryId = found.id;
   }
 
-  // Fallback category if none detected
   if (!categoryName) {
     categoryName = type === 'income' ? 'Salary' : 'Other';
     if (categories.length > 0) {
@@ -154,18 +176,17 @@ export function parseVoiceExpense(
     const found = accounts.find(a => a.type === accountName || a.name.toLowerCase().includes(accountName!.toLowerCase()));
     if (found) accountId = found.id;
   }
+
   if (!accountId && accounts.length > 0) {
-    // Default to UPI or Cash or first account
     const upiAcc = accounts.find(a => a.type === 'UPI');
     accountId = upiAcc ? upiAcc.id : accounts[0].id;
     accountName = upiAcc ? upiAcc.name : accounts[0].name;
   }
 
-  // 6. Description extraction if empty
+  // 6. Description extraction
   if (!description) {
-    // Clean out numbers, currency symbols, and account keywords
     let cleanDesc = lower
-      .replace(/(?:spent|paid|bought|add|log|for|on|using|via|with|at|rs\.?|rupees|inr|₹|\$)/g, '')
+      .replace(/(?:spent|paid|bought|add|log|for|on|using|via|with|at|rs\.?|rupees|inr|₹|\$|macha|around|about)/g, '')
       .replace(/\b([\d,]+(?:\.\d{1,2})?)\b/g, '')
       .trim();
 
@@ -176,45 +197,50 @@ export function parseVoiceExpense(
     }
   }
 
-  // 7. Date & Time
+  // 7. Timezone-safe Local Date & Time Parsing
   const now = new Date();
-  let dateStr = now.toISOString().split('T')[0];
-  if (lower.includes('yesterday')) {
+  let dateStr = getLocalDateString(now);
+
+  if (lower.includes('yesterday') || lower.includes('last night')) {
     const yesterday = new Date(now);
     yesterday.setDate(yesterday.getDate() - 1);
-    dateStr = yesterday.toISOString().split('T')[0];
+    dateStr = getLocalDateString(yesterday);
   }
-  const timeStr = `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`;
 
-  // 8. Confidence Calculation
+  const timeStr = getLocalTimeString(now);
+
+  // 8. Strict Confidence Calculation (Prevents ₹0 transactions & ambiguous saves)
   const missingFields: string[] = [];
   let score = 0;
 
-  if (amount !== null) {
-    score += 0.5;
+  if (amount !== null && amount > 0) {
+    score += 0.55;
   } else {
     missingFields.push('amount');
   }
 
   if (categoryName && categoryName !== 'Other') {
-    score += 0.3;
+    score += 0.25;
   } else {
     missingFields.push('category');
   }
 
   if (description && description.length > 0) {
-    score += 0.2;
+    score += 0.20;
   }
 
   let confidence: ConfidenceLevel = 'low';
-  if (score >= 0.8) {
+  if (amount === null || amount <= 0) {
+    confidence = 'low';
+    score = 0;
+  } else if (score >= 0.85) {
     confidence = 'high';
   } else if (score >= 0.5) {
     confidence = 'medium';
   }
 
   return {
-    amount,
+    amount: (amount && amount > 0) ? amount : null,
     categoryName,
     categoryId: categoryId || (categories[0]?.id ?? 'cat-1'),
     merchant,
@@ -225,7 +251,7 @@ export function parseVoiceExpense(
     time: timeStr,
     type,
     confidence,
-    confidenceScore: score,
+    confidenceScore: parseFloat(score.toFixed(2)),
     rawInput: cleaned,
     missingFields,
   };

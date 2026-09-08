@@ -33,7 +33,7 @@ export interface Transaction {
   amount: number;
   merchant?: string;
   description: string;
-  date: string; // YYYY-MM-DD
+  date: string; // YYYY-MM-DD (Local timezone format)
   time: string; // HH:mm
   attachment?: string; // Base64 or object URL
   created_at: string;
@@ -109,4 +109,18 @@ export interface SpendingInsight {
   category?: string;
   actionText?: string;
   impactAmount?: number;
+}
+
+// Timezone-safe local date string helper (prevents midnight UTC date shift bug)
+export function getLocalDateString(d: Date = new Date()): string {
+  const year = d.getFullYear();
+  const month = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+}
+
+export function getLocalTimeString(d: Date = new Date()): string {
+  const hours = String(d.getHours()).padStart(2, '0');
+  const minutes = String(d.getMinutes()).padStart(2, '0');
+  return `${hours}:${minutes}`;
 }

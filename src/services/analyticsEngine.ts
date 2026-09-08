@@ -11,9 +11,12 @@ export interface AnalyticsMetrics {
   insights: SpendingInsight[];
 }
 
+const FALLBACK_PALETTE = ['#006948', '#3B82F6', '#EC4899', '#F59E0B', '#8B5CF6', '#10B981', '#6366F1', '#EF4444', '#14B8A6', '#06B6D4', '#64748B'];
+
 export function computeAnalyticsMetrics(
   transactions: Transaction[],
-  categories: Category[]
+  categories: Category[],
+  currencySymbol: string = '₹'
 ): AnalyticsMetrics {
   const now = new Date();
   const currentYear = now.getFullYear();
@@ -22,7 +25,6 @@ export function computeAnalyticsMetrics(
   const currentDay = Math.min(now.getDate(), daysInMonth);
 
   const currentMonthKey = `${currentYear}-${String(currentMonth + 1).padStart(2, '0')}`;
-  
   const prevMonthDate = new Date(currentYear, currentMonth - 1, 1);
   const prevMonthKey = `${prevMonthDate.getFullYear()}-${String(prevMonthDate.getMonth() + 1).padStart(2, '0')}`;
 
@@ -40,12 +42,10 @@ export function computeAnalyticsMetrics(
       if (monthKey === currentMonthKey) {
         currentMonthExpenses += t.amount;
 
-        // Category spend
         const cat = categories.find(c => c.id === t.category_id);
         const catName = cat ? cat.name : 'Other';
         categoryTotals.set(catName, (categoryTotals.get(catName) || 0) + t.amount);
 
-        // Merchant spend
         if (t.merchant) {
           const existing = merchantTotals.get(t.merchant) || { amount: 0, count: 0 };
           merchantTotals.set(t.merchant, {
@@ -58,7 +58,6 @@ export function computeAnalyticsMetrics(
       }
     }
 
-    // Trend grouping
     if (monthKey === currentMonthKey) {
       const existing = dailySpendMap.get(t.date) || { income: 0, expense: 0 };
       if (t.type === 'expense') {
@@ -70,16 +69,13 @@ export function computeAnalyticsMetrics(
     }
   });
 
-  // Daily burn rate
   const dailyBurnRate = Math.round(currentMonthExpenses / (currentDay || 1));
 
-  // MoM Delta shift
   let momDeltaPercent = 0;
   if (prevMonthExpenses > 0) {
     momDeltaPercent = parseFloat((((currentMonthExpenses - prevMonthExpenses) / prevMonthExpenses) * 100).toFixed(1));
   }
 
-  // Highest category
   let highestCategoryName = 'None';
   let highestCategoryAmount = 0;
   categoryTotals.forEach((amt, name) => {
@@ -89,38 +85,25 @@ export function computeAnalyticsMetrics(
     }
   });
 
-  // Category breakdown list
-  const categoryColors: Record<string, string> = {
-    'Food': '#006948',
-    'Transport': '#3B82F6',
-    'Shopping': '#EC4899',
-    'Bills': '#F59E0B',
-    'Fuel': '#8B5CF6',
-    'Health': '#10B981',
-    'Entertainment': '#6366F1',
-    'Rent': '#EF4444',
-    'Education': '#14B8A6',
-    'Travel': '#06B6D4',
-    'Business': '#64748B',
-    'Other': '#94A3B8',
-  };
-
+  // Dynamic category colors from Category entity with fallback palette
   const categoryBreakdown = Array.from(categoryTotals.entries())
-    .map(([name, amount]) => ({
-      name,
-      amount,
-      color: categoryColors[name] || '#006948',
-      percentage: currentMonthExpenses > 0 ? Math.round((amount / currentMonthExpenses) * 100) : 0,
-    }))
+    .map(([name, amount], index) => {
+      const catObj = categories.find(c => c.name === name);
+      const color = catObj?.color || FALLBACK_PALETTE[index % FALLBACK_PALETTE.length];
+      return {
+        name,
+        amount,
+        color,
+        percentage: currentMonthExpenses > 0 ? Math.round((amount / currentMonthExpenses) * 100) : 0,
+      };
+    })
     .sort((a, b) => b.amount - a.amount);
 
-  // Top Merchants
   const topMerchants = Array.from(merchantTotals.entries())
     .map(([name, data]) => ({ name, amount: data.amount, count: data.count }))
     .sort((a, b) => b.amount - a.amount)
     .slice(0, 5);
 
-  // Monthly trend array (day 1 to end of month)
   const monthlyTrend: { date: string; income: number; expense: number }[] = [];
   for (let i = 1; i <= daysInMonth; i++) {
     const dayStr = `${currentYear}-${String(currentMonth + 1).padStart(2, '0')}-${String(i).padStart(2, '0')}`;
@@ -132,19 +115,19 @@ export function computeAnalyticsMetrics(
     });
   }
 
-  // Predictive Intelligence Insights
+  // Dynamic currency-aware insights
   const insights: SpendingInsight[] = [];
-  
+
   if (categoryBreakdown.length > 0 && highestCategoryAmount > 0) {
     const foodCat = categoryBreakdown.find(c => c.name === 'Food');
     if (foodCat && foodCat.percentage >= 25) {
       insights.push({
         id: 'ins-food',
         title: 'Dining Velocity Alert',
-        message: `You spent ${foodCat.percentage}% of your expenses on Food & Dining this month. Pace stabilizes if weekend dine-outs stay under ₹2,100.`,
+        message: `You spent ${foodCat.percentage}% of your expenses on Food & Dining this month. Pace stabilizes if weekend dine-outs stay under ${currencySymbol}2,100.`,
         type: 'warning',
         category: 'Food',
-        actionText: 'Set Weekend Cap',
+        actionText: 'Set Cap',
         impactAmount: 2100,
       });
     }
@@ -152,7 +135,7 @@ export function computeAnalyticsMetrics(
     insights.push({
       id: 'ins-top-cat',
       title: `${highestCategoryName} is Top Spending Category`,
-      message: `${highestCategoryName} accounts for ₹${highestCategoryAmount.toLocaleString()} (${Math.round((highestCategoryAmount / (currentMonthExpenses || 1)) * 100)}%) of your current monthly spending.`,
+      message: `${highestCategoryName} accounts for ${currencySymbol}${highestCategoryAmount.toLocaleString()} (${Math.round((highestCategoryAmount / (currentMonthExpenses || 1)) * 100)}%) of your current monthly spending.`,
       type: 'info',
       category: highestCategoryName,
     });
