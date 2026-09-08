@@ -1,7 +1,7 @@
 import React, { createContext, useContext, useEffect, useState } from 'react';
-import { Account, Budget, Category, ParsedExpense, RecurringTransaction, Transaction, TransactionType, User, VoiceSettings } from '../types';
+import { Account, Budget, Category, ParsedExpense, RecurringTransaction, Transaction, User, VoiceSettings } from '../types';
 import { AnalyticsMetrics, computeAnalyticsMetrics } from '../services/analyticsEngine';
-import { computeFinancialSummary, FinancialSummary } from '../services/balanceEngine';
+import { computeAccountBalances, computeFinancialSummary, FinancialSummary } from '../services/balanceEngine';
 import { db } from '../services/db';
 import { ShakeDetector } from '../services/shakeDetector';
 import { siriIntentsService } from '../services/siriIntents';
@@ -49,7 +49,7 @@ const ExpenseContext = createContext<ExpenseContextType | undefined>(undefined);
 
 export const ExpenseProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [user, setUser] = useState<User>(() => db.getUser());
-  const [accounts, setAccounts] = useState<Account[]>(() => db.getAccounts());
+  const [rawAccounts, setRawAccounts] = useState<Account[]>(() => db.getAccounts());
   const [categories, setCategories] = useState<Category[]>(() => db.getCategories());
   const [transactions, setTransactions] = useState<Transaction[]>(() => db.getTransactions());
   const [budgets, setBudgets] = useState<Budget[]>(() => db.getBudgets());
@@ -62,7 +62,10 @@ export const ExpenseProvider: React.FC<{ children: React.ReactNode }> = ({ child
   
   const [shakeDetector, setShakeDetector] = useState<ShakeDetector | null>(null);
 
-  // Recompute summaries reactively
+  // Compute accurate account balances dynamically from opening balances + transactions
+  const accounts = computeAccountBalances(rawAccounts, transactions);
+
+  // Recompute financial summaries and analytics
   const summary = computeFinancialSummary(accounts, transactions);
   const analytics = computeAnalyticsMetrics(transactions, categories);
 
@@ -74,6 +77,15 @@ export const ExpenseProvider: React.FC<{ children: React.ReactNode }> = ({ child
   useEffect(() => { db.setBudgets(budgets); }, [budgets]);
   useEffect(() => { db.setRecurring(recurring); }, [recurring]);
   useEffect(() => { db.setSettings(settings); }, [settings]);
+
+  // Lock background scroll when Quick Add modal is open
+  useEffect(() => {
+    if (isQuickAddOpen) {
+      document.body.style.overflow = 'hidden';
+    } else {
+      document.body.style.overflow = 'auto';
+    }
+  }, [isQuickAddOpen]);
 
   // Handle Shake Detector Initialization
   useEffect(() => {
@@ -133,17 +145,6 @@ export const ExpenseProvider: React.FC<{ children: React.ReactNode }> = ({ child
 
     setTransactions(prev => [newTx, ...prev]);
 
-    // Recalculate account balances
-    setAccounts(prev => {
-      return prev.map(acc => {
-        if (acc.id === newTx.account_id) {
-          const delta = newTx.type === 'income' ? newTx.amount : -newTx.amount;
-          return { ...acc, current_balance: acc.current_balance + delta };
-        }
-        return acc;
-      });
-    });
-
     if (settings.soundEffects) {
       speechService.playSound('success');
     }
@@ -164,20 +165,6 @@ export const ExpenseProvider: React.FC<{ children: React.ReactNode }> = ({ child
 
     setTransactions(prev => [newTx, ...prev]);
 
-    setAccounts(prev => {
-      return prev.map(acc => {
-        let delta = 0;
-        if (acc.id === newTx.account_id) {
-          if (newTx.type === 'income') delta += newTx.amount;
-          else if (newTx.type === 'expense' || newTx.type === 'transfer') delta -= newTx.amount;
-        }
-        if (newTx.type === 'transfer' && acc.id === newTx.destination_account_id) {
-          delta += newTx.amount;
-        }
-        return { ...acc, current_balance: acc.current_balance + delta };
-      });
-    });
-
     if (settings.soundEffects) {
       speechService.playSound('success');
     }
@@ -186,59 +173,11 @@ export const ExpenseProvider: React.FC<{ children: React.ReactNode }> = ({ child
   };
 
   const updateTransaction = (tx: Transaction) => {
-    const oldTx = transactions.find(t => t.id === tx.id);
-    if (!oldTx) return;
-
     setTransactions(prev => prev.map(t => (t.id === tx.id ? tx : t)));
-
-    // Reverse old tx balance effect and apply new tx balance effect
-    setAccounts(prev => {
-      return prev.map(acc => {
-        let balance = acc.current_balance;
-
-        // Reverse old
-        if (acc.id === oldTx.account_id) {
-          if (oldTx.type === 'income') balance -= oldTx.amount;
-          else if (oldTx.type === 'expense' || oldTx.type === 'transfer') balance += oldTx.amount;
-        }
-        if (oldTx.type === 'transfer' && acc.id === oldTx.destination_account_id) {
-          balance -= oldTx.amount;
-        }
-
-        // Apply new
-        if (acc.id === tx.account_id) {
-          if (tx.type === 'income') balance += tx.amount;
-          else if (tx.type === 'expense' || tx.type === 'transfer') balance -= tx.amount;
-        }
-        if (tx.type === 'transfer' && acc.id === tx.destination_account_id) {
-          balance += tx.amount;
-        }
-
-        return { ...acc, current_balance: balance };
-      });
-    });
   };
 
   const deleteTransaction = (id: string) => {
-    const tx = transactions.find(t => t.id === id);
-    if (!tx) return;
-
     setTransactions(prev => prev.filter(t => t.id !== id));
-
-    // Reverse balance
-    setAccounts(prev => {
-      return prev.map(acc => {
-        let balance = acc.current_balance;
-        if (acc.id === tx.account_id) {
-          if (tx.type === 'income') balance -= tx.amount;
-          else if (tx.type === 'expense' || tx.type === 'transfer') balance += tx.amount;
-        }
-        if (tx.type === 'transfer' && acc.id === tx.destination_account_id) {
-          balance -= tx.amount;
-        }
-        return { ...acc, current_balance: balance };
-      });
-    });
   };
 
   const addAccount = (accData: Omit<Account, 'id' | 'user_id' | 'created_at'>) => {
@@ -249,15 +188,16 @@ export const ExpenseProvider: React.FC<{ children: React.ReactNode }> = ({ child
       current_balance: accData.opening_balance,
       created_at: new Date().toISOString(),
     };
-    setAccounts(prev => [...prev, newAcc]);
+    setRawAccounts(prev => [...prev, newAcc]);
   };
 
   const updateAccount = (acc: Account) => {
-    setAccounts(prev => prev.map(a => (a.id === acc.id ? acc : a)));
+    setRawAccounts(prev => prev.map(a => (a.id === acc.id ? acc : a)));
   };
 
   const deleteAccount = (id: string) => {
-    setAccounts(prev => prev.filter(a => a.id !== id));
+    setRawAccounts(prev => prev.filter(a => a.id !== id));
+    setTransactions(prev => prev.filter(t => t.account_id !== id && t.destination_account_id !== id));
   };
 
   const addCategory = (catData: Omit<Category, 'id' | 'user_id' | 'created_at'>) => {
@@ -299,7 +239,7 @@ export const ExpenseProvider: React.FC<{ children: React.ReactNode }> = ({ child
   const resetAllData = () => {
     db.resetToSeedData();
     setUser(db.getUser());
-    setAccounts(db.getAccounts());
+    setRawAccounts(db.getAccounts());
     setCategories(db.getCategories());
     setTransactions(db.getTransactions());
     setBudgets(db.getBudgets());
